@@ -10,6 +10,7 @@ from rich.text import Text
 
 from allways.chains import SUPPORTED_CHAINS, get_chain
 from allways.classes import SwapStatus
+from allways.cli.das_api import fetch_swap_from_das
 from allways.cli.help import StyledGroup
 from allways.cli.swap_commands.helpers import (
     SECONDS_PER_BLOCK,
@@ -306,20 +307,31 @@ def _display_swap(swap, chain_info=True):
 def view_swap(swap_id: int, watch: bool):
     """View details of a specific swap.
 
+    If the swap is no longer in contract storage (completed or timed out), details
+    are loaded from the Allways indexer when available (see ALLWAYS_DAS_BASE_URL).
+
     [dim]Examples:
         $ alw view swap 42
         $ alw view swap 42 --watch[/dim]
     """
     _, _, subtensor, client = get_cli_context(need_wallet=False)
 
+    das_swap = None
     try:
-        with loading('Reading swap...'):
+        with loading('Resolving swap...'):
             swap = client.get_swap(swap_id)
+            if not swap:
+                das_swap = fetch_swap_from_das(swap_id)
     except ContractError as e:
         console.print(f'[red]Failed to read swap: {e}[/red]')
         return
 
     if not swap:
+        if das_swap:
+            console.print('\n[dim]Swap no longer on-chain; showing indexer record.[/dim]')
+            _display_swap(das_swap)
+            return
+
         try:
             next_id = client.get_next_swap_id()
         except ContractError:
