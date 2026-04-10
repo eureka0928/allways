@@ -12,6 +12,7 @@ from typing import Any, Optional
 
 import requests
 
+from allways.chains import SUPPORTED_CHAINS
 from allways.classes import Swap, SwapStatus
 
 DEFAULT_DAS_BASE_URL = 'https://test-api.all-ways.io'
@@ -104,10 +105,15 @@ def fetch_swap_from_das(swap_id: int, timeout: float = 15.0) -> Optional[Swap]:
         payload = r.json()
     except ValueError:
         return None
+    if not isinstance(payload, dict):
+        return None
     raw = payload.get('swap')
     if not isinstance(raw, dict):
         return None
     try:
-        return swap_from_das(raw, fallback_swap_id=swap_id)
+        sw = swap_from_das(raw, fallback_swap_id=swap_id)
     except (TypeError, ValueError):
         return None
+    if sw.source_chain not in SUPPORTED_CHAINS or sw.dest_chain not in SUPPORTED_CHAINS:
+        return None
+    return sw
